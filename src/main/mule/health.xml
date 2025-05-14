@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:temperature-api="http://www.mulesoft.org/schema/mule/temperature-api"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/temperature-api http://www.mulesoft.org/schema/mule/temperature-api/current/mule-temperature-api.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
+	<flow name="health-flow" doc:id="ae3d8058-d45a-4334-b7dc-26a9c91c2e11" >
+		<set-payload value='#[{status:"UP"}]' doc:name="Set Payload" doc:id="680b2b0e-eb4d-42e6-a949-e197f55caef8" />
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Liveness Error" doc:id="f0d6876e-2317-48b7-baeb-4f8efc2234e1" type="ANY">
+				<set-variable value="503" doc:name="Set Variable" doc:id="adabe96e-83ca-4098-8224-ee61f3e0c8d9" variableName="httpStatus"/>
+				<set-payload value='#[{status:"DOWN"}]' doc:name="Set Payload" doc:id="c45e97bd-9161-4496-a145-d5023c235e37" />
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+	<flow name="readiness-flow" doc:id="de01afa3-b110-4e4c-b881-53f9b57a1273" >
+		<db:select doc:name="Select" doc:id="cbae9ab8-0517-46cb-87dc-ee38ff125f6a" config-ref="Database_Config">
+			<db:sql ><![CDATA[SELECT 1;]]></db:sql>
+		</db:select>
+		<temperature-api:health-check doc:name="health check" doc:id="181bfefa-2147-4ed2-94cc-1cfa40839d5a" config-ref="sensorDataConfig"/>
+		<vm:publish queueName="readiness-test-queue" doc:name="Publish" doc:id="958ea445-0e17-44cf-a6bb-9d61e3f21cdf" config-ref="VM_Config">
+			<vm:content ><![CDATA[ready]]></vm:content>
+		</vm:publish>
+		<set-payload value='#[{status:"Ready"}]' doc:name="Set Payload" doc:id="976394d8-aad1-4d6c-8511-132818b91cf5" />
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Readiness Error" doc:id="0ee693a5-19cf-4dcb-b76c-1a0689ffd3ea" type="ANY" >
+				<set-variable value="503" doc:name="Set Variable" doc:id="c3df6901-e33b-49f1-806a-baf7a12f559a" variableName="httpStatus" />
+				<set-payload value='#[{status:"Not Ready"}]' doc:name="Set Payload" doc:id="1c9fb46e-c0f4-406e-916b-bdcd9d4261c1" />
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+</mule>

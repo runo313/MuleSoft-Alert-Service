@@ -1,0 +1,11 @@
+%dw 2.0
+
+type auto_45a02142_6622_4735_9ff6_8f2e9c101dda_Input_Payload = {
+  phone?: String, 
+  preferred_method?: "slack" | "sms" | "email", 
+  slackWebhook?: String, 
+  email?: String, 
+  temperature_threshold?: Number, 
+  _?: Any
+}
+

@@ -1,0 +1,8 @@
+db:
+  password: "![i6FFkJPtio9ZLL2nt0sdUw==]"
+  
+sendgrid:
+  key: "![OdQ/gXgAkjCoqiHt9gWUshBLwRUsq3grYVFAszEKHhqvNawD9sQq0Xuyh3Z3F/tkLcO2BaMQAFkMTfYdVfds73eRtDjxZ1Bh]"
+  
+sensorAPI:
+  client_secret: "![wwuy0UocwnRFdBkf2y8QXohMtfUfqpPBW+Ot0/gyazosbqVsbMloAw==]"

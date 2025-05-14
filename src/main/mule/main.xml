@@ -1,0 +1,358 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:slack-messenger="http://www.mulesoft.org/schema/mule/slack-messenger"
+	xmlns:temperature-api="http://www.mulesoft.org/schema/mule/temperature-api" xmlns:sendgrid="http://www.mulesoft.org/schema/mule/sendgrid"
+	xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/sendgrid http://www.mulesoft.org/schema/mule/sendgrid/current/mule-sendgrid.xsd
+http://www.mulesoft.org/schema/mule/temperature-api http://www.mulesoft.org/schema/mule/temperature-api/current/mule-temperature-api.xsd
+http://www.mulesoft.org/schema/mule/slack-messenger http://www.mulesoft.org/schema/mule/slack-messenger/current/mule-slack-messenger.xsd">
+	<flow name="delete-user-flow" doc:id="d2d16ebb-e8ff-41a8-bd97-fb8d5b4042ed" >
+		<db:delete doc:name="Delete User" doc:id="7ac6a842-a91e-4fb3-be21-0575b0bd1c75" config-ref="Database_Config" >
+			<db:sql ><![CDATA[DELETE FROM subscribers where clientid = :clientID;]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+clientID: vars.clientId
+}]]]></db:input-parameters>
+		</db:delete>
+		<logger level="INFO" doc:name="Log Deleted Rows" doc:id="c756cb71-3cd9-4d7e-bee9-6b124a530d27" message="Deleted rows: #[payload] " />
+		<choice doc:name="Check if row is deleted" doc:id="bc2d1d06-d7a6-4d96-8ac1-ae0437ff522a" >
+			<when expression="#[payload == 0]" >
+				<ee:transform doc:name="Transform Message" doc:id="4d7d81c9-fd1e-47e4-9f60-fbf2ba283c55" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	Message: "Client ID not found. No user unsubscribed."
+}           
+       ]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="httpStatus" ><![CDATA[404]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="Transform Message" doc:id="33e6cccb-3341-4f17-9bd0-501434985d2c" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+  message: "You have successfully unsubscribed from this service"                      
+}     
+       ]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+					</ee:variables>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<error-handler ref="global-handler" />
+	</flow>
+	<flow name="update-info-flow" doc:id="f2aae48e-d226-4214-a5b9-d826e96c0745" >
+		<db:update doc:name="Update" doc:id="a8a11796-ab12-41cb-85c8-9fa399c2b40c" config-ref="Database_Config" >
+			<db:sql ><![CDATA[UPDATE subscribers SET 
+    email = COALESCE(NULLIF(:email, ''), email),  
+    phone = COALESCE(NULLIF(:phone, ''), phone),  
+    slackwebhook = COALESCE(NULLIF(:slackWebhook, ''), slackwebhook),  
+    temperature_threshold = COALESCE(NULLIF(:temperature_threshold, 0), temperature_threshold),  
+    preferred_method = COALESCE(NULLIF(:preferred_method, ''), preferred_method)
+WHERE clientid = :clientID;]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+clientID: vars.clientId ,
+email: payload.email ,
+phone: payload.phone ,
+slackWebhook: payload.slackWebHook ,
+temperature_threshold: payload.threshold ,
+preferred_method: payload.method 
+
+}]]]></db:input-parameters>
+		</db:update>
+		<logger level="INFO" doc:name="Logger" doc:id="0a06875b-1587-41f3-a5b1-9d1811953f96" message="Updated rows: #[payload] and #[payload.affectedRows]" />
+		<choice doc:name="Choice" doc:id="1ae72ce7-3444-4b16-abad-a4c11f15eb8a" >
+			<when expression="#[payload.affectedRows == 0]" >
+				<ee:transform doc:name="Transform Message" doc:id="aec4812e-38e9-4d72-9db9-fea7b23e5094" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Client ID not found. No updates made."
+}           
+       ]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="httpStatus" ><![CDATA[404]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="Transform Message" doc:id="33780207-3b4d-48ff-8eb3-038d44f9f58b" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+  message: "Your details have been successfully updated"                      
+}     
+       ]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<error-handler ref="global-handler" />
+	</flow>
+	<flow name="validate-info-flow" doc:id="3b8804b0-aac1-45c5-bb8d-5d4e8fd75722" >
+		<set-variable value="#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	email: payload.email,&#10;	phone: payload.phone,&#10;	slack: payload.slackWebHook,&#10;	method: payload.method,&#10;	threshold:payload.threshold&#10;}]" doc:name="Set Variable" doc:id="0af4652d-c5d9-446d-80f4-714f051f63a8" variableName="details" />
+		<choice doc:name="When email is not null" doc:id="0f8af6d5-58a9-4e79-b48d-47e2385184cd" >
+			<when expression='#[vars.details.email != "" and vars.details.email != null]' >
+				<validation:is-email doc:name="Is email" doc:id="f16bf248-2117-45fe-a578-d499a3b0d1b9" email="#[vars.details.email]" message="Email is Invalid" />
+			</when>
+		</choice>
+		<choice doc:name="When phone is not null" doc:id="e4e5823b-73f4-48bc-b5d8-c7e9a51b5b90" >
+			<when expression='#[(vars.details.phone != "") and (vars.details.phone != null)]' >
+				<validation:matches-regex doc:name="Matches regex" doc:id="7e4aec2b-2a79-4e34-b2ea-d5fa6183026a" value="#[vars.details.phone]" regex="#[/^(?:\+1)?\d{10}$/]" message="Invalid phone number" />
+			</when>
+		</choice>
+		<choice doc:name="When slack is not null" doc:id="8582f378-673a-4076-9cc7-57e346463dcc" >
+			<when expression='#[vars.details.slack != "" and vars.details.slack != null]' >
+				<validation:matches-regex doc:name="Matches regex" doc:id="29f1905c-18ea-4540-86cd-56ce4f3a46e6" value="#[vars.details.slack]" regex="#[/^https:\/\/hooks\.slack\.com\/services\/T[A-Z0-9]+\/B[A-Z0-9]+\/[a-zA-Z0-9]+$/]" message='#["Invalid Slack Webhook"]' />
+			</when>
+		</choice>
+		<choice doc:name="When threshold is not null" doc:id="b40378fa-8dc4-4a42-81f0-ac2b6320f785" >
+			<when expression="#[vars.details.threshold != null]" >
+				<validation:is-number numberType="FLOAT" doc:name="Is number" doc:id="96282127-0c28-4a1f-a665-4c779c95be22" value="#[vars.details.threshold]" minValue="0" maxValue="85" message="threshold must be a number" />
+			</when>
+		</choice>
+		<choice doc:name="When method is not null" doc:id="3daaa1fb-5393-4928-9e34-64dc761dbffa" >
+			<when expression='#[vars.details.method != "" and vars.details.method != null]' >
+				<validation:matches-regex doc:name="Matches regex" doc:id="fbf96a63-169f-4c01-adfc-4bcf521100b1" value="#[vars.details.method]" regex="^(email|phone|slack)$" message="Invalid preferred notification method. Must be 'email', 'phone', or 'slack'." />
+			</when>
+		</choice>
+		<logger level="INFO" doc:name="Logger" doc:id="d16c8ecf-64d4-4179-a9dd-6d2c75983096" message="Validations complete for: #[payload]" />
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="b463f514-138d-4c58-a88e-178da98034c8" type="VALIDATION:INVALID_EMAIL, VALIDATION:INVALID_NUMBER, VALIDATION:MISMATCH">
+				<logger level="INFO" doc:name="Logger" doc:id="dd5d27c7-3158-438a-81c4-d20ba4041c38" message="Validation failed for #[payload] and error: #[error.description]"/>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+	<flow name="retrieve-sensor-data" doc:id="041442b3-a100-4c0e-b43d-0bdc083a120c" >
+		<temperature-api:retrieve-temperature-data-by-format format="json" doc:name="retrieve temperature data by format" doc:id="49e77638-f1f0-482b-b7e2-2b79886b86ac" config-ref="sensorDataConfig"/>
+		<set-variable value="#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	&#10;	TemperatureC: (payload.TemperatureF[0] default 0) as Number     &#10;		&#10;}]" doc:name="Set Variable" doc:id="04965114-d648-4d69-ba15-2b9d6466748f" variableName="latestTemperature" />
+		<logger level="INFO" doc:name="Latest Temperature" doc:id="8e8935bf-d46d-4d32-b0b3-4dbab3e9bb78" message="latest temperature: #[vars.latestTemperature.TemperatureC]" />
+		<db:select doc:name="Retrieve Subscribers" doc:id="8428b30d-2427-473a-aa4f-12249c8f7848" config-ref="Database_Config" queryTimeout="6" target="subscribers">
+			<db:sql><![CDATA[SELECT clientid,email,phone,slackwebhook,temperature_threshold,preferred_method FROM subscribers;]]></db:sql>
+		</db:select>
+		<flow-ref doc:name="Flow Reference" doc:id="0d32355c-46c2-4353-8174-1ba1f33d9cdb" name="check-threshold-flow" />
+		<error-handler ref="global-handler" />
+	</flow>
+	<flow name="check-threshold-flow" doc:id="7cf0759a-320b-4af5-a955-1ffc97cff582">
+		<foreach doc:name="For Each" doc:id="080727c6-f97a-45cf-8b5d-4499b14d142b" collection="#[vars.subscribers]">
+			<set-variable value="#[payload]" doc:name="Set Variable" doc:id="66ea5c87-f472-43d9-8163-ef439fee72e5" variableName="currentSubscriber" />
+			<choice doc:name="Choice" doc:id="23b98e28-a7d8-489f-a33f-a6d032336f00">
+			<when expression="#[vars.latestTemperature.TemperatureC &gt; vars.currentSubscriber.temperature_threshold]">
+				<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;"Temperature exceeded: " ++ (vars.latestTemperature.TemperatureC as String) ++ "°C"]' doc:name="Set Variable" doc:id="2657124a-a420-4124-90f8-0d50e6955ecc" variableName="alertMessage" />
+				<vm:publish queueName="alertInfo" doc:name="Publish" doc:id="55d3d85c-a6fa-4eef-ab37-388fdbccd7a3" config-ref="VM_Config">
+					<vm:content><![CDATA[#[%dw 2.0
+output application/json
+---
+{
+	"info": vars.currentSubscriber,
+	"alertMessage": vars.alertMessage
+	
+
+}]]]></vm:content>
+				</vm:publish>
+			</when>
+			<otherwise>
+				<logger level="INFO" doc:name="Logger" doc:id="db785550-5c21-4876-b570-b37a10d4558b" message="temperature is within threshold " />
+			</otherwise>
+		</choice>
+		</foreach>
+	</flow>
+	<flow name="store-details-flow" doc:id="38a9c385-d67e-40fc-9e00-e96003db8570" >
+		<logger level="INFO" doc:name="Logger" doc:id="62813a24-e110-42f7-8f59-5f65cc80e2d2" message="proceeding to Store details for #[payload]" />
+		<set-variable value="#[payload]" doc:name="Set Variable" doc:id="fc6cd89c-21d6-4f5c-9393-655400c95658" variableName="clientDetails" />
+		<db:insert doc:name="Store Details in DB" doc:id="81a3cbdf-965e-474b-ae79-953219fdd0e5" config-ref="Database_Config" >
+			<db:sql ><![CDATA[INSERT INTO subscribers (email,phone,slackwebhook,temperature_threshold,preferred_method,created_at) 
+VALUES(:email,:phone,:slackWebhook,:temperature,:preferred_method, NOW());]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+email: payload.email as String default "",
+phone: payload.phone as String  default "",
+slackWebhook: payload.slackWebHook as String default "",
+temperature: payload.threshold as Number default 66.0,
+preferred_method: payload.method as String
+
+}]]]></db:input-parameters>
+		</db:insert>
+		<db:select doc:name="Retrieve ID" doc:id="adb5993c-03b6-4485-84fa-2722ca530a96" config-ref="Database_Config" >
+			<db:sql ><![CDATA[SELECT clientid FROM subscribers where email = :email;]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	email: vars.clientDetails.email as String
+}]]]></db:input-parameters>
+		</db:select>
+		<logger level="INFO" doc:name="Display Stored Client ID" doc:id="bb8cf733-9787-4ec1-aad7-64e13aa89661" message="Client Details stored for ID: #[payload.clientid]" />
+		<ee:transform doc:name="Transform Message" doc:id="b8e04a5a-d8bb-44e9-9cf7-a6b7dd112a48" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+
+---
+{
+	message: "Subscription to our service was successful. Your client ID is below. Keep it safe ",
+	"ClientID": payload.clientid 
+}
+            
+       ]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<error-handler ref="global-handler" />
+	</flow>
+	<flow name="send-message-flow" doc:id="fa0a4a31-2889-4d93-9c8d-40d89b092b2f" >
+		<vm:listener queueName="alertInfo" doc:name="Listener" doc:id="6defada1-9a2d-4b92-943f-c3b23fb9cf1a" config-ref="VM_Config" numberOfConsumers="6" timeout="7"/>
+		<logger level="INFO" doc:name="Logger" doc:id="e6cc03a3-c9ec-4422-8003-fec96f331d71" message="Vm listener details: #[payload]" />
+		<choice doc:name="Choice" doc:id="b49c969b-720b-477d-a754-648f329e5602" >
+			<when expression='#[payload.info.email != null and payload.info.preferred_method == "email"]' >
+				<logger level="INFO" doc:name="Logger" doc:id="f500dadf-9f69-477f-866a-c5d57970ec13" message="Attempting to send alert email to #[payload.info.email] " />
+				<set-payload value='#[{&#10;  "personalizations": [&#10;    {&#10;      "to": [&#10;        {&#10;          "email": payload.info.email&#10;        }&#10;      ]&#10;    }&#10;  ],&#10;  "from": {&#10;    "email": "rsdr165@gmail.com"&#10;  },&#10;  "subject": "High Temperature Alert",&#10;  "content": [&#10;    {&#10;      "type": "text/plain",&#10;      "value": (payload.alertMessage default "High temperature threshold exceeded.") as String&#10;    }&#10;  ]&#10;}]' doc:name="Set Payload" doc:id="27569109-05a7-40a9-85e8-3710ec8f8c01" />
+				<try doc:name="Try" doc:id="b5b752be-5821-4c1c-a77c-7a17e1b6193a" >
+					<sendgrid:send-mail doc:name="Send Mail" doc:id="de1df5bf-0ea1-466f-8432-b858daf27650" config-ref="SendGridConfig" />
+					<error-handler ref="global-handler" />
+				</try>
+			</when>
+			<when expression='#[payload.info.slackwebhook != null and payload.info.preferred_method == "slack"]' >
+				<logger level="INFO" doc:name="Logger" doc:id="d4b33f19-828b-4906-b734-1bc55888e16a" message="Attempting to send alert slack message to #[payload.info.slackwebhook]" />
+				<try doc:name="Try" doc:id="328de061-54b0-4d6f-9ae6-86d6ff85cb25" >
+					<until-successful maxRetries="1" doc:name="Until Successful" doc:id="550ba1ff-5bd8-4200-81a1-77d9872e9f77" millisBetweenRetries="10000" >
+						<slack-messenger:slack-webhook-messenger doc:name="Slack webhook messenger" doc:id="12d3a56f-2abb-42e7-b9c0-ffc7d4ab1fc8" url="#[payload.info.slackwebhook]" message='#[%dw 2.0 output application/json --- {text:payload.alertMessage as String default "High Temperature Alert"}]'/>
+					</until-successful>
+					<error-handler ref="global-handler" />
+				</try>
+			</when>
+		</choice>
+		<logger level="INFO" doc:name="Logger" doc:id="585d1839-8052-4339-a62a-e2d865ba8e7a" message="Slack returned: #[attributes.statusCode] with payload: #[payload]" />
+	</flow>
+	<flow name="invalid-slack-handler-flow" doc:id="67e7f053-1cfd-41b0-b922-af177853d468" >
+		<vm:listener queueName="slack-DLQ" doc:name="Listener" doc:id="de0ea08e-2e1b-4735-8546-8e24beeeaf50" config-ref="VM_Config" />
+		<logger level="INFO" doc:name="Logger" doc:id="7f20a898-863f-420c-81b0-50548b0b8537" message="Slack Fall back flow full info : #[payload]" />
+		<first-successful doc:name="First Successful" doc:id="98b53ceb-3ee1-41dd-ba7a-79641fb8b4de">
+			<route>
+				<http:request method="POST" doc:name="Slack_Fall_Back_Alert" doc:id="c6f6382b-75cc-42e2-afea-2873ba53afd0" config-ref="Slack_Config" url="#[payload.info.slackwebhook]">
+			<http:body><![CDATA[#[%dw 2.0
+output application/json
+---
+{
+	"text": "We couldn’t send to your preferred method. Please update"
+}]]]></http:body>
+		</http:request>
+				<logger level="INFO" doc:name="Logger" doc:id="79bdf699-2647-4b21-b58f-9aa20ae75ddc" message="Sent fall back message" />
+			</route>
+			<route>
+				<ee:transform doc:name="Transform Message" doc:id="4a6825ee-5340-4e8d-bda8-fd0a79241d68">
+					<ee:message>
+						<ee:set-payload><![CDATA[{
+  "personalizations": [
+    {
+      "to": [
+        {
+          "email": payload.info.email
+        }
+      ]
+    }
+  ],
+  "from": {
+    "email": "rsdr165@gmail.com"
+  },
+  "subject": "Unable to contact you via Slack",
+  "content": [
+    {
+      "type": "text/plain",
+      "value": "Update your slack webhook or change your preferred method of contact"
+    }
+  ]
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<sendgrid:send-mail doc:name="Send Mail" doc:id="b0f8fa6b-bed0-429f-9aa5-7d585a63e959" config-ref="SendGridConfig" />
+			</route>
+		</first-successful>
+	</flow>
+	<flow name="fall-back-invalid-email-flow" doc:id="cc9546b0-f4a6-4fce-935a-160102d4b0fb" >
+		<vm:listener queueName="DLQ" doc:name="Listener" doc:id="e45bff63-9d94-41b7-8f9e-07ded81232b0" config-ref="VM_Config" numberOfConsumers="2" />
+		<logger level="INFO" doc:name="Invalid email" doc:id="19590d6d-4404-45bd-a4d6-6276aaeab4aa" message="Processing email fall back for #[payload]" />
+		<db:select doc:name="Select" doc:id="0ae13db9-05dc-4f93-8055-ad15275bcade" config-ref="Database_Config" target="info" >
+			<db:sql ><![CDATA[SELECT slackwebhook, phone from subscribers where email = :email;]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	email : payload
+}]]]></db:input-parameters>
+		</db:select>
+		<set-variable value="#[vars.info[0]]" doc:name="Set Variable" doc:id="ec6bb909-d46c-4269-b42c-49ac85755e38" variableName="info" />
+		<first-successful doc:name="First Successful" doc:id="e3053e9e-9534-4fbb-af7b-51bfe1778cb0" >
+			<route >
+				<http:request method="POST" doc:name="Send Fall Back Slack Message" doc:id="91482165-5360-492a-a3fc-5722fc89a82c" config-ref="Slack_Config" url="#[vars.info.slackwebhook]" >
+					<http:body ><![CDATA[#[%dw 2.0
+output application/json
+---
+{
+	"text": "We couldn’t send messages to your preferred method. Please update your email" ++ " " ++ payload as String default "email.com"
+}]]]></http:body>
+				</http:request>
+			</route>
+			<route >
+				<http:request method="POST" doc:name="Send Fall Back SMS" doc:id="6f2f7a5a-2ba1-465e-85f6-61beff925763" config-ref="HTTP_Request_Twilio" url="https://api.twilio.com/YOUR_TWILIO_API" >
+					<http:body ><![CDATA[#[%dw 2.0
+output application/json
+---
+{
+	"to": vars.info.phone,
+	"message": "Please update your email."
+}]]]></http:body>
+				</http:request>
+			</route>
+		</first-successful>
+		<logger level="INFO" doc:name="Logger" doc:id="08d56880-6993-4e2a-910f-d280ca5e62b5" message="Fall Back message sent." />
+		<error-handler ref="global-handler" />
+	</flow>
+	<error-handler name="global-handler" doc:id="afa6379d-dc52-460d-94f5-59fed83b2b44" >
+		<on-error-continue enableNotifications="true" logException="true" doc:name="Validation Errors" doc:id="a725b359-5792-4e9d-ab43-39de6b5298a8" type="VALIDATION:INVALID_EMAIL, VALIDATION:INVALID_NUMBER, VALIDATION:MISMATCH">
+			<ee:transform doc:name="Transform Message" doc:id="1d23da31-a46a-4687-8894-e621791a610a" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	Error: error.description
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="httpStatus" ><![CDATA[400]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-continue>
+		<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="bddb0658-9bdb-4266-8212-4826f6f22e9f" type="SLACK-MESSENGER:FORBIDDEN, SLACK-MESSENGER:INVALID_REQUEST" >
+			<logger level="INFO" doc:name="Logger" doc:id="9696d912-fde3-49f0-84c0-3588514e5d25" message="Preferred method failed for id : #[payload.info.clientid]" />
+			<vm:publish queueName="slack-DLQ" doc:name="Publish" doc:id="0e4a2551-a0bc-40a6-ba01-7dbee4b524e5" config-ref="VM_Config" sendCorrelationId="ALWAYS" />
+		</on-error-continue>
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="fa20ff64-c41b-4c1c-b8c1-9b1a98c540cb" type="SENDGRID:BAD_REQUEST, SENDGRID:CONNECTIVITY, SENDGRID:FORBIDDEN, SENDGRID:INTERNAL_SERVER_ERROR, SENDGRID:SERVICE_UNAVAILABLE, SENDGRID:UNAUTHORIZED,DB:BAD_SQL_SYNTAX, DB:CONNECTIVITY, DB:QUERY_EXECUTION, DB:RETRY_EXHAUSTED,TEMPERATURE-API:BAD_REQUEST, TEMPERATURE-API:FORBIDDEN, TEMPERATURE-API:INTERNAL_SERVER_ERROR, TEMPERATURE-API:SERVICE_UNAVAILABLE, TEMPERATURE-API:UNAUTHORIZED">
+			<ee:transform doc:name="Transform Message" doc:id="3889f6a6-ae46-47bb-a771-fa7b1dca24d1" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	Error:"Service is Currently unavailable. Please try again later."
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="httpStatus" ><![CDATA[500]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+	</error-handler>
+</mule>

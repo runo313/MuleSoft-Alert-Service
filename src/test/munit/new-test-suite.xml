@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:munit="http://www.mulesoft.org/schema/mule/munit" xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xsi:schemaLocation="
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+		http://www.mulesoft.org/schema/mule/munit-tools  http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+	<munit:config name="new-test-suite.xml" />
+	<munit:test name="new-test-suiteTest" doc:id="dc30f875-2837-4f9a-b00d-a85802b7c26c" >
+		<munit:behavior >
+			<munit-tools:mock-when doc:name="Mock when" doc:id="a3136003-2551-4f0e-8554-f0da92897b97" processor="db:update">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<munit:set-event doc:name="Set Event" doc:id="d4cd1b5a-d28f-4d1f-aa86-e94c1332c9ee" >
+				<munit:payload value='#[{&#10;	id:87232,&#10;	email:"rsdr165@gmail.com",&#10;	phone:"+19193456745",&#10;	method:"email"&#10;}]' />
+			</munit:set-event>
+			<flow-ref doc:name="Flow Reference" doc:id="3a6310ad-5608-4a29-ba58-544f35993b37" name="patch:\client\(clientId):application\json:temperature-alert-service-config"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:verify-call doc:name="Verify call" doc:id="0a471659-b8e9-46f2-a0af-16eb71b0e5c6" processor="db:update">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+			</munit-tools:verify-call>
+			<munit-tools:assert doc:name="Assert expression" doc:id="e7f9d2d4-d223-4f92-8774-44aebbd01119" >
+				<munit-tools:that ><![CDATA[#[import * from dw::test::Asserts 
+ ---
+attributes.statusCode == 200]]]></munit-tools:that>
+			</munit-tools:assert>
+		</munit:validation>
+	</munit:test>
+
+</mule>

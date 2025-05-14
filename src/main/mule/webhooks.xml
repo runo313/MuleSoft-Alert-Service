@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
+	<flow name="Sendgrid-webhook-alertsFlow" doc:id="72b6db8a-f098-4228-8284-fc638573764e" >
+		<http:listener doc:name="Listener" doc:id="1b1c5878-3ba1-4881-9589-948dc286e6fc" config-ref="listenerConfig" path="/unsent" />
+		<logger level="INFO" doc:name="Logger" doc:id="d74990bb-e841-4a37-ad5a-424aa795091c" message="Webhook Payload: #[payload]" />
+		<choice doc:name="Choice" doc:id="d6e5c882-0162-482e-8e73-3b2b868d510b" >
+			<when expression="#[payload[0].event == 'bounce' or payload[0].event == 'dropped']" >
+				<vm:publish queueName="DLQ" doc:name="Publish" doc:id="9dad14bb-d300-4c92-8196-d5df2f9aa6bc" config-ref="VM_Config" timeout="4" >
+					<vm:content ><![CDATA[#[payload[0].email]]]></vm:content>
+				</vm:publish>
+				<logger level="WARN" doc:name="Logger" doc:id="1454ec32-d6d8-4b2c-baa9-495b8aa8dfa1" message="Email: #[payload[0].email] failed to send message. Attempting fall back attempt" />
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="4b067cba-fc9e-4b30-ab42-cb4bad457d76" message="Other email event: #[payload]" />
+			</otherwise>
+		</choice>
+		<set-payload value="ok" doc:name="Set Payload" doc:id="f21728d1-37c0-4acb-a419-3f0029afcde5" />
+	</flow>
+</mule>

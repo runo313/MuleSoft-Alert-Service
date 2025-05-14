@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:temperature-api="http://www.mulesoft.org/schema/mule/temperature-api"
+	xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+	xmlns:sendgrid="http://www.mulesoft.org/schema/mule/sendgrid"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:slack="http://www.mulesoft.org/schema/mule/slack"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:email="http://www.mulesoft.org/schema/mule/email" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd 
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/slack http://www.mulesoft.org/schema/mule/slack/current/mule-slack.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/sendgrid http://www.mulesoft.org/schema/mule/sendgrid/current/mule-sendgrid.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
+http://www.mulesoft.org/schema/mule/temperature-api http://www.mulesoft.org/schema/mule/temperature-api/current/mule-temperature-api.xsd">
+	
+	<http:request-config name="Slack_Config" doc:name="HTTP Request configuration" doc:id="2962448c-52bb-4fde-ab00-ea3e4af3cf40" >
+		<http:request-connection host="hooks.slack.com" />
+	</http:request-config>
+	<http:request-config name="HTTP_Request_RESTAPI" doc:name="HTTP Request configuration" doc:id="aa167256-8417-437c-bab6-d5403787c10e" >
+		<http:request-connection host="localhost" port="8083" />
+	</http:request-config>
+	<http:request-config name="HTTP_Request_Twilio" doc:name="HTTP Request configuration" doc:id="63d5091f-f60b-4fa5-9ee4-49a3b9ed4171" >
+		<http:request-connection host="api.twilio.com" />
+	</http:request-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="cab8610a-8bb4-4c2d-a59d-8646a3eedd13" >
+		<db:generic-connection url="${db.url}" user="${db.user}" password="${secure::db.password}" driverClassName="${db.driver}"/>
+	</db:config>
+	<vm:config name="VM_Config" doc:name="VM Config" doc:id="f53d30ac-fb1e-4ac7-8392-b660e7d4f64a" >
+		<vm:queues >
+			<vm:queue queueName="alertInfo" maxOutstandingMessages="100" />
+			<vm:queue queueName="DLQ" maxOutstandingMessages="50" queueType="PERSISTENT"/>
+			<vm:queue queueName="slack-DLQ" queueType="PERSISTENT" maxOutstandingMessages="50" />
+			<vm:queue queueName="readiness-test-queue" maxOutstandingMessages="3" />
+		</vm:queues>
+	</vm:config>
+	<sendgrid:config name="SendGridConfig" doc:name="SendGrid Config" doc:id="0ceba027-66aa-4b69-a417-ae576ac2a238" >
+		<sendgrid:connection protocol="HTTPS" baseUri="https://api.sendgrid.com" apiKey="${secure::sendgrid.key}"/>
+	</sendgrid:config>
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="697a9ebd-c1e7-46a9-8f40-30ca12e54b62" file="secure-application-${env}.yaml" key="${encryption.key}" >
+		<secure-properties:encrypt algorithm="Blowfish" />
+	</secure-properties:config>
+	<configuration-properties doc:name="Configuration properties" doc:id="eae31e49-c6c5-4a6d-96e7-9b9379ce7fdd" file="application-${env}.yaml" />
+	<temperature-api:config name="sensorDataConfig" doc:name="Temperature API Config" doc:id="fc1baba8-80f3-4cef-849c-575d60c422ab" property_host="${sensorAPI.host}" property_port="${sensorAPI.port}" property_protocol="${sensorAPI.protocol}" property_client-id="${sensorAPI.clientId}" property_client-secret="${secure::sensorAPI.client_secret}" property_custom-auth-client-id="${sensorAPI.clientId}" property_custom-auth-client-secret="${secure::sensorAPI.client_secret}" property_basePath="${sensorAPI.basePath}" property_responseTimeout="6000"/>
+	<http:listener-config name="listenerConfig" doc:name="HTTP Listener config" doc:id="a87c7bb9-ab89-4be7-a536-544f639c8cc3" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	</mule>
