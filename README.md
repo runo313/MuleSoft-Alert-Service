@@ -30,7 +30,7 @@ This service collects temperature and humidity sensor data streamed via Apache K
 
 ## Technologies Used
 
-- **MuleSoft Anypoint Platform** (APIkit, Studio, Manager)
+- **MuleSoft Anypoint Platform** 
 - **Apache Kafka**
 - **Java** (Kafka Consumer Microservice)
 - **PostgreSQL**
@@ -50,8 +50,8 @@ This service collects temperature and humidity sensor data streamed via Apache K
 |----------|--------|-------------|
 | `/sensor-data/{format}` | GET | Retrieve sensor readings in specified format (json/xml/csv/yaml/xlsx) |
 | `/subscribe` | POST | Register client alert preferences |
-| `/update/{clientId}` | PUT | Update client alert preferences |
-| `/unsubscribe/{clientId}` | DELETE | Remove client from alerts |
+| `/client/{clientId}` | PUT | Update client alert preferences |
+| `/client/{clientId}` | DELETE | Remove client from alerts |
 | `/reports` | GET | List archived data files in S3 |
 | `/reports/{year}/{month}/{filename}` | GET | Download archived CSV |
 | `/health` | GET | Liveness check of application |
